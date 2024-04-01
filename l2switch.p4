@@ -143,6 +143,7 @@ control MyIngress(inout headers hdr,
         else if (hdr.ethernet.isValid()) {
             fwd_l2.apply();
         }
+        log_msg("Egress Port : {}", {standard_metadata.egress_spec});
 
     }
 }

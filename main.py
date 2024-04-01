@@ -1,3 +1,7 @@
+import sys
+sys.path.append("/home/whyalex/p4app/docker/scripts")
+
+
 from p4app import P4Mininet
 
 from controller import MacLearningController
@@ -24,7 +28,7 @@ sw.insertTableEntry(
 )
 
 # Start the MAC learning controller
-cpu = MacLearningController(sw)
+cpu = MacLearningController(sw,1)
 cpu.start()
 
 h2, h3 = net.get("h2"), net.get("h3")
