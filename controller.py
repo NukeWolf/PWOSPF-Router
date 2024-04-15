@@ -1,6 +1,6 @@
 from threading import Thread, Event
 from scapy.all import sendp
-from scapy.all import Packet, Ether, IP, ARP
+from scapy.all import Packet, Ether, IP, ARP, ls
 from async_sniff import sniff
 from cpu_metadata import CPUMetadata
 import time
@@ -16,11 +16,13 @@ class MacLearningController(Thread):
         self.iface = sw.intfs[1].name
         self.port_for_mac = {}
         self.stop_event = Event()
+        self.mac = sw.intfs[1].MAC()
+        self.ip = sw.intfs[1].IP()
+        print(self.ip)
 
     def addMacAddr(self, mac, port):
         # Don't re-add the mac-port mapping if we already have it:
         if mac in self.port_for_mac: return
-
         self.sw.insertTableEntry(table_name='MyIngress.fwd_l2',
                 match_fields={'hdr.ethernet.dstAddr': [mac]},
                 action_name='MyIngress.set_egr',
@@ -30,13 +32,32 @@ class MacLearningController(Thread):
     def handleArpReply(self, pkt):
         self.addMacAddr(pkt[ARP].hwsrc, pkt[CPUMetadata].srcPort)
         self.send(pkt)
+        
 
+    # Add
+    def sendArpReply(self,pkt):
+        # Ethernet
+        pkt[Ether].dst = pkt[Ether].src
+        pkt[Ether].src = self.mac
+
+        # ARP Modification
+        pkt[ARP].op = ARP_OP_REPLY
+        pkt[ARP].hwdst = pkt[ARP].hwsrc
+        ptemp = pkt[ARP].pdst
+        pkt[ARP].pdst = pkt[ARP].psrc
+        pkt[ARP].hwsrc = self.mac
+        pkt[ARP].psrc = ptemp
+        
+        pkt.show2()
+        self.send(pkt)
     def handleArpRequest(self, pkt):
         self.addMacAddr(pkt[ARP].hwsrc, pkt[CPUMetadata].srcPort)
-        self.send(pkt)
+        self.sendArpReply(pkt)
 
     def handlePkt(self, pkt):
         #pkt.show2()
+        # if (pkt[Ether].type == 34525):
+        #     return
         assert CPUMetadata in pkt, "Should only receive packets from switch with special header"
 
         # Ignore packets that the CPU sends:
