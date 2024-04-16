@@ -4,6 +4,8 @@ from scapy.all import Packet, Ether, IP, ARP, ls
 from async_sniff import sniff
 from cpu_metadata import CPUMetadata
 import time
+import ipaddress
+
 
 
 from arp_handler import ArpHandler
@@ -20,22 +22,25 @@ ALLSPFRouters_addr = "224.0.0.5"
 MASK = "255.255.255.0"
 
 class MacLearningController(Thread):
-    def __init__(self, sw, start_wait=0.3):
+    def __init__(self, sw, mac, ip, area, ports, start_wait=0.3):
         super(MacLearningController, self).__init__()
         self.sw = sw
         self.start_wait = start_wait # time to wait for the controller to be listenning
         self.iface = sw.intfs[1].name
         self.port_for_mac = {}
         self.stop_event = Event()
-        self.mac = sw.intfs[1].MAC()
-        self.ip = sw.intfs[1].IP()
+        self.mac = mac
+        self.ip = ip
         
-        self.PWOSPF_handler = PWOSPF_Router(self.mac,self.ip,self.send,MASK)
+        self.subnet = ipaddress.ip_network(f'{self.ip}/{MASK}', strict=False).network_address
+        
+        self.PWOSPF_handler = PWOSPF_Router(self.mac,self.ip,self.send,MASK,area,ports)
         
         self.arp_table = ArpHandler(sw,self.mac,self.ip)
 
-    def in_gateway(self,pkt):
-        return True
+    def in_gateway(self,ip):
+        subnet = ipaddress.ip_network(f'{ip}/{MASK}', strict=False).network_address
+        return self.subnet == subnet
     
     def addMacAddr(self, mac, port):
         # Don't re-add the mac-port mapping if we already have it:
@@ -71,9 +76,9 @@ class MacLearningController(Thread):
         self.addMacAddr(pkt[ARP].hwsrc, pkt[CPUMetadata].srcPort)
     
     def handlePkt(self, pkt):
-        print("RECIEVE")
-        pkt.show2()
-        print("")
+        # print("RECIEVE")
+        # pkt.show2()
+        # print("")
         # if (pkt[Ether].type == 34525):
         #     return
         assert CPUMetadata in pkt, "Should only receive packets from switch with special header"
@@ -82,8 +87,12 @@ class MacLearningController(Thread):
         if pkt[CPUMetadata].fromCpu == 1: return
 
         if ARP in pkt:
+            # If arp request is not in same gateway, drop packet.
+            if (not self.in_gateway(pkt[ARP].pdst)):
+                # print(f"reject arp from {self.ip} to {pkt[ARP].pdst}", )
+                return
+                
             held_packets = self.arp_table.update_entry(pkt[ARP].psrc,pkt[ARP].hwsrc)
-
             if pkt[ARP].op == ARP_OP_REQ:
                 self.handleArpRequest(pkt)
             elif pkt[ARP].op == ARP_OP_REPLY:
@@ -93,7 +102,11 @@ class MacLearningController(Thread):
                 self.send(packet)
         
         if IP in pkt:
-            if (self.in_gateway(pkt)):
+            if pkt[IP].proto == PWOSPF_PROTOCOL:
+                # pkt.show2()
+                self.PWOSPF_handler.handlePacket(pkt)
+                
+            elif (self.in_gateway(pkt[IP].dst)):
                 if(self.arp_table.is_ip_in_arp_table(pkt[IP].dst)):
                     # TODO: Should be handled but potentially if the ARP_Table boots a packet, that means that something else has been evicted.
                     pass
@@ -109,17 +122,28 @@ class MacLearningController(Thread):
         pkt[CPUMetadata].fromCpu = 1
         kwargs = dict(iface=self.iface, verbose=False)
         kwargs.update(override_kwargs)
-        print("SEND")
-        pkt.show2()
-        print("")
+        # print("SEND")
+        # pkt.show2()
+        # print("")
         sendp(*args, **kwargs)
 
     def run(self):
         sniff(iface=self.iface, prn=self.handlePkt, stop_event=self.stop_event)
 
     def start(self, *args, **kwargs):
+        self.sw.insertTableEntry(
+            table_name='MyIngress.local_ip_routing',
+            match_fields={'hdr.ipv4.dstAddr': [ALLSPFRouters_addr]},
+            action_name='MyIngress.send_to_cpu',
+            action_params={}
+        )
+        self.sw.insertTableEntry(
+            table_name='MyIngress.local_ip_routing',
+            match_fields={'hdr.ipv4.dstAddr': [self.ip]},
+            action_name='MyIngress.send_to_cpu',
+            action_params={}
+        )
         super(MacLearningController, self).start(*args, **kwargs)
-                
         time.sleep(self.start_wait)
         self.PWOSPF_handler.start()
         

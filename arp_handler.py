@@ -8,8 +8,8 @@ class ArpHandler():
     def __init__(self,sw,mac,ip):
         self.table = dict()
         self.packet_buffer = dict()
-        self.mac = '00:00:00:00:00:01'
-        self.ip = '10.0.0.1'
+        self.mac = mac
+        self.ip = ip
         self.sw = sw
         
     
@@ -18,13 +18,11 @@ class ArpHandler():
     
     def find_mac(self,pkt):
         ip = pkt[IP].dst
-        print(ip)
         arp_req_pkt = Ether(dst="ff:ff:ff:ff:ff:ff", src=self.mac) / CPUMetadata() / ARP(hwlen=6, plen=4, op=ARP_OP_REQ, hwsrc=self.mac,
             psrc=self.ip, hwdst='00:00:00:00:00:00', pdst=ip)
         if ip not in self.packet_buffer:
             self.packet_buffer[ip] = []
         self.packet_buffer[ip].append(pkt)
-        pkt.show2()
         
         return arp_req_pkt
     
