@@ -29,7 +29,8 @@ header cpu_metadata_t {
     bit<8> fromCpu;
     bit<16> origEtherType;
     bit<16> srcPort;
-    bit<8> multicast;    
+    bit<8> multicast;  
+    bit<16> egressPort;  
 }
 
 header arp_t {
@@ -69,7 +70,6 @@ struct headers {
 
 struct metadata { 
     ip4Addr_t next_hop_ip;
-    macAddr_t next_hop_mac;
 }
 
 parser MyParser(packet_in packet,
@@ -149,6 +149,7 @@ control MyIngress(inout headers hdr,
         hdr.cpu_metadata.origEtherType = hdr.ethernet.etherType;
         hdr.cpu_metadata.srcPort = (bit<16>)standard_metadata.ingress_port;
         hdr.cpu_metadata.multicast = 0;
+        hdr.cpu_metadata.egressPort = 0;
         hdr.ethernet.etherType = TYPE_CPU_METADATA;
     }
 
@@ -169,6 +170,8 @@ control MyIngress(inout headers hdr,
 
     action forward_gateway(macAddr_t dst, port_t port){
         standard_metadata.egress_spec = port;
+        hdr.ethernet.srcAddr = hdr.ethernet.dstAddr;
+        hdr.ethernet.dstAddr = dst;
         update_ip_packet();
         exit;
     }
@@ -215,7 +218,6 @@ control MyIngress(inout headers hdr,
         }
         actions = {
             forward_gateway;
-            send_to_cpu;
             drop;
             NoAction;
         }
@@ -229,7 +231,6 @@ control MyIngress(inout headers hdr,
         }
         actions = {
             send_to_cpu;
-            drop;
             NoAction;
         }
         size=64;
@@ -250,6 +251,10 @@ control MyIngress(inout headers hdr,
                 set_mgid(1);
                 return;
             }
+            if(hdr.cpu_metadata.egressPort != 0){
+                set_egr((bit<9>)hdr.cpu_metadata.egressPort);
+                return;
+            }
         }
             
         if (hdr.ethernet.isValid()) {
@@ -259,6 +264,7 @@ control MyIngress(inout headers hdr,
                 }
             }
             else if(hdr.ipv4.isValid()){
+                
                 // Error Checks of Packet
                 if (hdr.ipv4.ttl == 0 || standard_metadata.checksum_error == 1){
                     send_to_cpu();
@@ -271,7 +277,10 @@ control MyIngress(inout headers hdr,
                     if(meta.next_hop_ip == 0){
                         meta.next_hop_ip = hdr.ipv4.dstAddr;
                     }
+                    macAddr_t tempDst = hdr.ethernet.srcAddr;
                     arp_table.apply();
+
+                    hdr.ethernet.srcAddr = tempDst;
                     update_ip_packet();
                 }
                 

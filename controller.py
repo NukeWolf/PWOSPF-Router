@@ -34,7 +34,7 @@ class MacLearningController(Thread):
         
         self.subnet = ipaddress.ip_network(f'{self.ip}/{MASK}', strict=False).network_address
         
-        self.PWOSPF_handler = PWOSPF_Router(self.mac,self.ip,self.send,MASK,area,ports)
+        self.PWOSPF_handler = PWOSPF_Router(self.mac,self.ip,self.send,MASK,area,ports,sw=sw)
         
         self.arp_table = ArpHandler(sw,self.mac,self.ip)
 
@@ -87,8 +87,8 @@ class MacLearningController(Thread):
         if pkt[CPUMetadata].fromCpu == 1: return
 
         if ARP in pkt:
-            # If arp request is not in same gateway, drop packet.
-            if (not self.in_gateway(pkt[ARP].pdst)):
+            # If arp request is not from the same gateway, drop packet.
+            if (not self.in_gateway(pkt[ARP].psrc)):
                 # print(f"reject arp from {self.ip} to {pkt[ARP].pdst}", )
                 return
                 
@@ -114,6 +114,9 @@ class MacLearningController(Thread):
                     # Buffers packets
                     arp_req_pkt = self.arp_table.find_mac(pkt)
                     self.send(arp_req_pkt)
+            else:
+                print("PACKET NOT IN GATEWAY")
+                pkt.show2()
                     
 
     def send(self, *args, **override_kwargs):
@@ -143,6 +146,10 @@ class MacLearningController(Thread):
             action_name='MyIngress.send_to_cpu',
             action_params={}
         )
+        # self.sw.insertTableEntry(table_name='MyIngress.ipv4_routing',
+        #             match_fields={'hdr.ipv4.dstAddr': [self.ip, 24]},
+        #             action_name='MyIngress.NoAction',
+        #             action_params={})
         super(MacLearningController, self).start(*args, **kwargs)
         time.sleep(self.start_wait)
         self.PWOSPF_handler.start()

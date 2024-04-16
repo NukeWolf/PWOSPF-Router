@@ -1,6 +1,6 @@
 import sys
 sys.path.append("/home/whyalex/p4app/docker/scripts")
-
+import time
 
 from p4app import P4Mininet
 
@@ -8,7 +8,7 @@ from controller import MacLearningController
 from my_topo import SingleSwitchTopo
 
 # Add three hosts. Port 1 (h1) is reserved for the CPU.
-NUM_SWITCHES = 3
+NUM_SWITCHES = 6
 NUM_HOSTS_PER_SWITCH = 3
 AREA = 1
 
@@ -47,6 +47,11 @@ print(h3.cmd("ping -c1 10.2.0.2"))
 print(h2.cmd("arp -n"))
 
 print(h3.cmd("ping -c1 10.2.0.2"))
+
+time.sleep(10)
+print(h3.cmd("ping -c1 10.6.0.2"))
+print(h3.cmd("ping -c3 10.6.0.2"))
+print(h3.cmd("tracepath 10.6.0.2"))
 
 sw = net.get("s%d" % 2)
 # These table entries were added by the CPU:

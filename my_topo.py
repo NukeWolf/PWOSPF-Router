@@ -19,7 +19,8 @@ class SingleSwitchTopo(Topo):
                 )
                 self.addLink(host, switch, port2=i)
         
-        links = [(1,2),(2,3),(3,1)]
+        # links = [(1,2),(2,3), (2,5), (3,8), (8,4), (4,6), (4,5), (5,7)]
+        links = [(1,2), (2,3), (3,4), (4,5), (5,6)]
         for s1,s2 in links:
             s1 = switches[s1-1]
             s2 = switches[s2-1]
