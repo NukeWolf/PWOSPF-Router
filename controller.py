@@ -7,11 +7,17 @@ import time
 
 
 from arp_handler import ArpHandler
+from pwospf_router import PWOSPF_Router
 
 ARP_OP_REQ   = 0x0001
 ARP_OP_REPLY = 0x0002
 
 PWOSPF_PROTOCOL = 89
+ALLSPFRouters_addr = "224.0.0.5"
+
+
+
+MASK = "255.255.255.0"
 
 class MacLearningController(Thread):
     def __init__(self, sw, start_wait=0.3):
@@ -23,6 +29,8 @@ class MacLearningController(Thread):
         self.stop_event = Event()
         self.mac = sw.intfs[1].MAC()
         self.ip = sw.intfs[1].IP()
+        
+        self.PWOSPF_handler = PWOSPF_Router(self.mac,self.ip,self.send,MASK)
         
         self.arp_table = ArpHandler(sw,self.mac,self.ip)
 
@@ -94,12 +102,9 @@ class MacLearningController(Thread):
                     arp_req_pkt = self.arp_table.find_mac(pkt)
                     self.send(arp_req_pkt)
                     
-                
-    
 
     def send(self, *args, **override_kwargs):
         pkt = args[0]
-        
         assert CPUMetadata in pkt, "Controller must send packets with special header"
         pkt[CPUMetadata].fromCpu = 1
         kwargs = dict(iface=self.iface, verbose=False)
@@ -114,7 +119,11 @@ class MacLearningController(Thread):
 
     def start(self, *args, **kwargs):
         super(MacLearningController, self).start(*args, **kwargs)
+                
         time.sleep(self.start_wait)
+        self.PWOSPF_handler.start()
+        
+        
 
     def join(self, *args, **kwargs):
         self.stop_event.set()

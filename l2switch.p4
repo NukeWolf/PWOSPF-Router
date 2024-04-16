@@ -29,6 +29,7 @@ header cpu_metadata_t {
     bit<8> fromCpu;
     bit<16> origEtherType;
     bit<16> srcPort;
+    bit<8> multicast;    
 }
 
 header arp_t {
@@ -89,10 +90,12 @@ parser MyParser(packet_in packet,
         }
     }
 
+    // TODO: Make sure to put all types in parse_cpu_datatype
     state parse_cpu_metadata {
         packet.extract(hdr.cpu_metadata);
         transition select(hdr.cpu_metadata.origEtherType) {
             TYPE_ARP: parse_arp;
+            TYPE_IPV4: parse_ipv4;
             default: accept;
         }
     }
@@ -136,13 +139,16 @@ control MyIngress(inout headers hdr,
     action drop() {
         mark_to_drop(standard_metadata);
     }
+    action update_ip_packet(){
+        hdr.ipv4.ttl = hdr.ipv4.ttl - 1;
+    }
 
     
-
     action cpu_meta_encap() {
         hdr.cpu_metadata.setValid();
         hdr.cpu_metadata.origEtherType = hdr.ethernet.etherType;
         hdr.cpu_metadata.srcPort = (bit<16>)standard_metadata.ingress_port;
+        hdr.cpu_metadata.multicast = 0;
         hdr.ethernet.etherType = TYPE_CPU_METADATA;
     }
 
@@ -161,8 +167,10 @@ control MyIngress(inout headers hdr,
         hdr.ethernet.dstAddr = dst;
     }
 
-    action forward_ip_hop(ip4Addr_t dst){
-        meta.next_hop_ip = dst;
+    action forward_gateway(macAddr_t dst, port_t port){
+        standard_metadata.egress_spec = port;
+        update_ip_packet();
+        exit;
     }
     action set_egr(port_t port) {
         standard_metadata.egress_spec = port;
@@ -170,6 +178,7 @@ control MyIngress(inout headers hdr,
     action set_mgid(mcastGrp_t mgid) {
         standard_metadata.mcast_grp = mgid;
     }
+
 
     table fwd_l2 {
         key = {
@@ -185,16 +194,19 @@ control MyIngress(inout headers hdr,
         default_action = drop();
     }
 
+
     table arp_table {
         key = {
             meta.next_hop_ip : exact;
         }
         actions = {
             set_ether;
+            drop;
+            send_to_cpu;
             NoAction;
         }
         size = 64;
-        default_action = NoAction();
+        default_action = send_to_cpu();
     }
 
     table ipv4_routing {
@@ -202,7 +214,7 @@ control MyIngress(inout headers hdr,
             hdr.ipv4.dstAddr : lpm;
         }
         actions = {
-            forward_ip_hop;
+            forward_gateway;
             send_to_cpu;
             drop;
             NoAction;
@@ -231,9 +243,15 @@ control MyIngress(inout headers hdr,
     
     apply {
         
-        if (standard_metadata.ingress_port == CPU_PORT)
+        //From CPU
+        if (standard_metadata.ingress_port == CPU_PORT){
             cpu_meta_decap();
-        
+            if (hdr.cpu_metadata.multicast == 1){
+                set_mgid(1);
+                return;
+            }
+        }
+            
         if (hdr.ethernet.isValid()) {
             if (hdr.arp.isValid()) {
                 if (standard_metadata.ingress_port != CPU_PORT){
@@ -244,20 +262,21 @@ control MyIngress(inout headers hdr,
                 // Error Checks of Packet
                 if (hdr.ipv4.ttl == 0 || standard_metadata.checksum_error == 1){
                     send_to_cpu();
-                
                 }
                 else {
                     // Proceed with IP Resvole
+                    local_ip_routing.apply();
+
                     ipv4_routing.apply();
-                    if(meta.next_hop_ip != 0){
-                        arp_table.apply();
+                    if(meta.next_hop_ip == 0){
+                        meta.next_hop_ip = hdr.ipv4.dstAddr;
                     }
-                    
-                    hdr.ipv4.ttl = hdr.ipv4.ttl - 1;
+                    arp_table.apply();
+                    update_ip_packet();
                 }
                 
             }
-            // Alternate Ipv4 Modes
+            // Alternate Ethernet Protocols
             else {
                 send_to_cpu();
             }
