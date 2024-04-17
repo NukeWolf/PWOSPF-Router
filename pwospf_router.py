@@ -112,8 +112,7 @@ class PWOSPF_Router(Thread):
         self.interfaces = dict()
         for x in range(2,num_ports + 2):
             self.interfaces[x] = PWOSPF_Interface()
-            
-        
+
             
         #LSU Info
         self.sequence = 0

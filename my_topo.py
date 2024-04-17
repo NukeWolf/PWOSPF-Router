@@ -2,7 +2,7 @@ from mininet.topo import Topo
 
 
 class SingleSwitchTopo(Topo):
-    def __init__(self, num_switches, num_hosts_per_switch, **opts):
+    def __init__(self, num_switches, num_hosts_per_switch, links, **opts):
         Topo.__init__(self, **opts)
 
         
@@ -18,16 +18,14 @@ class SingleSwitchTopo(Topo):
                     "s%d_h%d" % (s+1,i), ip="10.%d.0.%d" % (s+1,i), mac="00:00:00:00:%02x:%02x" % (s+1,i)
                 )
                 self.addLink(host, switch, port2=i)
-        
-        # links = [(1,2),(2,3), (2,5), (3,8), (8,4), (4,6), (4,5), (5,7)]
-        links = [(1,2), (2,3), (3,4), (4,5), (5,6)]
+    
+
         for s1,s2 in links:
             s1 = switches[s1-1]
             s2 = switches[s2-1]
             self.addLink(s1,s2)
             self.extra_links[s1] += 1
             self.extra_links[s2] += 1
-        print(self.extra_links)
             
 
         

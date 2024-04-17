@@ -1,6 +1,8 @@
 import sys
 sys.path.append("/home/whyalex/p4app/docker/scripts")
 import time
+import itertools
+import random
 
 from p4app import P4Mininet
 
@@ -8,15 +10,17 @@ from controller import MacLearningController
 from my_topo import SingleSwitchTopo
 
 # Add three hosts. Port 1 (h1) is reserved for the CPU.
-NUM_SWITCHES = 6
+NUM_SWITCHES = 8
 NUM_HOSTS_PER_SWITCH = 3
 AREA = 1
+links = [(1,2),(2,3), (2,5), (3,8), (8,4), (4,6), (4,5), (5,7)]
 
-topo = SingleSwitchTopo(NUM_SWITCHES,NUM_HOSTS_PER_SWITCH)
+topo = SingleSwitchTopo(NUM_SWITCHES,NUM_HOSTS_PER_SWITCH, links)
 net = P4Mininet(program="l2switch.p4", topo=topo, auto_arp=False)
 net.start()
 
 cpus = [] 
+
 
 for s in range(1,NUM_SWITCHES + 1):
 # Add a mcast group for all ports (except for the CPU port)
@@ -40,18 +44,20 @@ for s in range(1,NUM_SWITCHES + 1):
     cpu.start()
     cpus.append(cpu)
 
-h2, h3 = net.get("s2_h2"), net.get("s2_h3")
 
+h2, h3 = net.get("s2_h2"), net.get("s2_h3")
+h1 = net.get("s1_h2")
 
 print(h3.cmd("ping -c1 10.2.0.2"))
 print(h2.cmd("arp -n"))
-
-print(h3.cmd("ping -c1 10.2.0.2"))
-
-time.sleep(10)
 print(h3.cmd("ping -c1 10.6.0.2"))
-print(h3.cmd("ping -c3 10.6.0.2"))
-print(h3.cmd("tracepath 10.6.0.2"))
+
+# Wait for router to setup and link state updates to propagate.
+time.sleep(30)
+print(h3.cmd("ping -c1 10.6.0.2"))
+print(h3.cmd("ping -c3 10.4.0.2"))
+print(h1.cmd("traceroute -4 10.6.0.2"))
+
 
 sw = net.get("s%d" % 2)
 # These table entries were added by the CPU:
