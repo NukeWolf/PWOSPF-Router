@@ -136,6 +136,11 @@ control MyIngress(inout headers hdr,
                   inout metadata meta,
                   inout standard_metadata_t standard_metadata) {
 
+    
+    counter(0,CounterType.packets_and_bytes) ip_packets_counter;
+    counter(0,CounterType.packets_and_bytes) arp_packets_counter;
+    counter(0,CounterType.packets_and_bytes) cpu_packets_counter;
+
     action drop() {
         mark_to_drop(standard_metadata);
     }
@@ -161,6 +166,7 @@ control MyIngress(inout headers hdr,
     action send_to_cpu() {
         cpu_meta_encap();
         standard_metadata.egress_spec = CPU_PORT;
+        cpu_packets_counter.count(0);
         exit;
     }
 
@@ -172,7 +178,6 @@ control MyIngress(inout headers hdr,
         standard_metadata.egress_spec = port;
         hdr.ethernet.srcAddr = hdr.ethernet.dstAddr;
         hdr.ethernet.dstAddr = dst;
-        update_ip_packet();
         exit;
     }
     action set_egr(port_t port) {
@@ -246,25 +251,34 @@ control MyIngress(inout headers hdr,
         
         //From CPU
         if (standard_metadata.ingress_port == CPU_PORT){
-            cpu_meta_decap();
+
             if (hdr.cpu_metadata.multicast == 1){
                 set_mgid(1);
+                cpu_meta_decap();
                 return;
             }
-            if(hdr.cpu_metadata.egressPort != 0){
+            else if(hdr.cpu_metadata.egressPort != 0){
                 set_egr((bit<9>)hdr.cpu_metadata.egressPort);
+                cpu_meta_decap();
                 return;
             }
+            else{
+                cpu_meta_decap();
+            }
+            
         }
             
         if (hdr.ethernet.isValid()) {
             if (hdr.arp.isValid()) {
+                arp_packets_counter.count(0);
                 if (standard_metadata.ingress_port != CPU_PORT){
                     send_to_cpu();
                 }
             }
             else if(hdr.ipv4.isValid()){
-                
+                log_msg("IPv4 ttl: {}  | Protocol: {}\n", {hdr.ipv4.ttl,hdr.ipv4.protocol}); 
+                ip_packets_counter.count(0);
+                update_ip_packet();
                 // Error Checks of Packet
                 if (hdr.ipv4.ttl == 0 || standard_metadata.checksum_error == 1){
                     send_to_cpu();
@@ -281,7 +295,6 @@ control MyIngress(inout headers hdr,
                     arp_table.apply();
 
                     hdr.ethernet.srcAddr = tempDst;
-                    update_ip_packet();
                 }
                 
             }

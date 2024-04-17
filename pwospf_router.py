@@ -16,7 +16,7 @@ PWOSPF_PROTOCOL = 89
 PWOSPF_HELLO_TYPE = 1
 PWOSPF_LSU_TYPE = 4
 
-LSUINT = 15
+LSUINT = 30
 HELLOINT = 5
 
 class PWOSPF_Interface():
@@ -345,10 +345,11 @@ class RoutingTableManager():
         entries_to_remove = current_entries_set.difference(incoming_entries_set)
         entries_to_add = incoming_entries_set.difference(current_entries_set)
         entries_to_change = current_entries_set.intersection(incoming_entries_set)
-        print(f"~~~~~~~~~~UPDATE for {self.ip}~~~~~~~~~~")
-        print(entries_to_add)
-        print(entries_to_change)
-        print(entries_to_remove)
+        
+        # print(f"~~~~~~~~~~UPDATE for {self.ip}~~~~~~~~~~")
+        # print(entries_to_add)
+        # print(entries_to_change)
+        # print(entries_to_remove)
         
         for entryKey in entries_to_add:
             entry = incoming_entries[entryKey]

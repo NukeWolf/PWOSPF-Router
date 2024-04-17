@@ -1,6 +1,7 @@
 from threading import Thread, Event
 from scapy.all import sendp
-from scapy.all import Packet, Ether, IP, ARP, ls
+from scapy.all import Packet, Ether, IP, ARP, ls, ICMP
+from scapy.all import UDP
 from async_sniff import sniff
 from cpu_metadata import CPUMetadata
 import time
@@ -13,6 +14,7 @@ from pwospf_router import PWOSPF_Router
 
 ARP_OP_REQ   = 0x0001
 ARP_OP_REPLY = 0x0002
+ICMP_PROTO = 1
 
 PWOSPF_PROTOCOL = 89
 ALLSPFRouters_addr = "224.0.0.5"
@@ -82,7 +84,6 @@ class MacLearningController(Thread):
         # if (pkt[Ether].type == 34525):
         #     return
         assert CPUMetadata in pkt, "Should only receive packets from switch with special header"
-
         # Ignore packets that the CPU sends:
         if pkt[CPUMetadata].fromCpu == 1: return
 
@@ -105,7 +106,15 @@ class MacLearningController(Thread):
             if pkt[IP].proto == PWOSPF_PROTOCOL:
                 # pkt.show2()
                 self.PWOSPF_handler.handlePacket(pkt)
-                
+                return
+            
+            if pkt[IP].ttl == 0:
+                response = Ether(dst=pkt[Ether].src, src=self.mac) / CPUMetadata() / IP(src=self.ip, dst=pkt[IP].src, proto=ICMP_PROTO) / ICMP(type=11,code=0) / pkt[IP]
+                self.send(response)
+                return
+            
+            # if ICMP in pkt:
+            #     self.ICMP_handler(pkt)
             elif (self.in_gateway(pkt[IP].dst)):
                 if(self.arp_table.is_ip_in_arp_table(pkt[IP].dst)):
                     # TODO: Should be handled but potentially if the ARP_Table boots a packet, that means that something else has been evicted.
@@ -114,11 +123,17 @@ class MacLearningController(Thread):
                     # Buffers packets
                     arp_req_pkt = self.arp_table.find_mac(pkt)
                     self.send(arp_req_pkt)
-            else:
-                print("PACKET NOT IN GATEWAY")
-                pkt.show2()
                     
-
+            else:
+                # PACKET is not in gateway, but missed ip routing table and now misses arp_cache
+                response = Ether(dst=pkt[Ether].src, src=self.mac) / CPUMetadata() / IP(src=self.ip, dst=pkt[IP].src, proto=ICMP_PROTO) / ICMP(type=3,code=6) / pkt[IP]
+                self.send(response)
+                
+                
+                    
+    def ICMP_handler(self,pkt):
+        pass
+        
     def send(self, *args, **override_kwargs):
         pkt = args[0]
         assert CPUMetadata in pkt, "Controller must send packets with special header"

@@ -28,12 +28,13 @@ class ArpHandler():
     
     def update_entry(self,ip,mac):
         # TODO: Check for existing entries? Don't make copies or override.
-        self.table[ip] = mac
-        
-        self.sw.insertTableEntry(table_name='MyIngress.arp_table',
+        if ip not in self.table:
+            self.table[ip] = mac
+            self.sw.insertTableEntry(table_name='MyIngress.arp_table',
                 match_fields={'meta.next_hop_ip': [ip]},
                 action_name='MyIngress.set_ether',
                 action_params={'dst': mac})
+        
         if ip in self.packet_buffer:
             held_packets = self.packet_buffer[ip]
             del self.packet_buffer[ip]
