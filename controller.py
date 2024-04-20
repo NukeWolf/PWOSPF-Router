@@ -15,6 +15,7 @@ from pwospf_router import PWOSPF_Router
 ARP_OP_REQ   = 0x0001
 ARP_OP_REPLY = 0x0002
 ICMP_PROTO = 1
+ICMP_ECHO_TYPE = 8
 
 PWOSPF_PROTOCOL = 89
 ALLSPFRouters_addr = "224.0.0.5"
@@ -113,8 +114,22 @@ class MacLearningController(Thread):
                 self.send(response)
                 return
             
-            # if ICMP in pkt:
-            #     self.ICMP_handler(pkt)
+            # For packets directed
+            if pkt[IP].dst == self.ip:
+                if ICMP in pkt:
+                    if pkt[ICMP].type == ICMP_ECHO_TYPE:
+                        pkt[Ether].src = pkt[Ether].src
+                        pkt[Ether].dst = self.mac
+                        pkt[IP].dst = pkt[IP].src
+                        pkt[IP].src = self.ip
+                        pkt[ICMP].type = 0
+                        self.send(pkt) 
+                    return
+                else:
+                    # Currently don't support any transport protocols
+                    response = Ether(dst=pkt[Ether].src, src=self.mac) / CPUMetadata() / IP(src=self.ip, dst=pkt[IP].src, proto=ICMP_PROTO) / ICMP(type=3,code=2) / pkt[IP]
+                    self.send(response)
+                    return
             elif (self.in_gateway(pkt[IP].dst)):
                 if(self.arp_table.is_ip_in_arp_table(pkt[IP].dst)):
                     # TODO: Should be handled but potentially if the ARP_Table boots a packet, that means that something else has been evicted.

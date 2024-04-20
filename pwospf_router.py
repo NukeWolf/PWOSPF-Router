@@ -44,10 +44,19 @@ class PWOSPF_Interface():
     def get_routing_info(self):
         return [(x['router_id'], x['router_mac']) for x in self.neighbors]
     
+    # Returns true if interface has expired
+    def update_timer(self):
+        self.NEIGHBOR_TIMEOUT_TIMER -= 1
+        if self.NEIGHBOR_TIMEOUT_TIMER == 0:
+            self.neighbors = []
+            return True
+        return False
+        
+    
 
 class PWOSPF_LSU_Data():
     def __init__(self,pkt):
-        self.LSU_TIMEOUT_timer = time.time()
+        self.LSU_TIMEOUT_timer = 3
         self.current_sequence = pkt[PWOSPF_LSU].sequence
         self.router_id = pkt[PWOSPF_Header].router_id
         self.router_ip = pkt[IP].src
@@ -63,7 +72,7 @@ class PWOSPF_LSU_Data():
 
     # Returns whether data was updated.
     def update_data(self,pkt) -> bool:
-        self.LSU_TIMEOUT_timer = time.time()
+        self.LSU_TIMEOUT_timer = 3
         self.current_sequence = pkt[PWOSPF_LSU].sequence
         
         current_links = set(x['router_id'] for x in self.links)
@@ -88,6 +97,13 @@ class PWOSPF_LSU_Data():
         
     def get_link_routers(self):
         return [x['router_id'] for x in self.links]
+    
+    def update_timer(self):
+        self.LSU_TIMEOUT_timer -= 1
+        if self.LSU_TIMEOUT_timer == 0:
+            self.links = []
+            return True
+        return False
 
     
     
@@ -121,13 +137,23 @@ class PWOSPF_Router(Thread):
         
         self.routing_manager = RoutingTableManager(sw,self.mask,self.ip)
 
+    def check_hello_timeout(self):
+        for interface in self.interfaces:
+            updated = self.interfaces[interface].update_timer()
+            if updated:
+                self.send_LSU()
         
+    def check_LSU_timers(self):
+        for link_state_data in self.LSUS:
+            self.LSUS[link_state_data].update_timer()
+
     
     def run(self):
         while True:
             current_time = time.time()
             if current_time - self.helloint > self.helloint_timer:
                 self.send_hello()
+                self.check_hello_timeout()
                 self.helloint_timer = current_time
             if current_time - LSUINT > self.lsuint_timer:
                 self.send_LSU()

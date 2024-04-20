@@ -56,7 +56,10 @@ print(h3.cmd("ping -c1 10.6.0.2"))
 time.sleep(30)
 print(h3.cmd("ping -c1 10.6.0.2"))
 print(h3.cmd("ping -c3 10.4.0.2"))
+
 print(h1.cmd("traceroute -4 10.6.0.2"))
+print(h1.cmd("traceroute -4 10.7.0.2"))
+print(h1.cmd("ping -c1 10.5.0.1"))
 
 
 sw = net.get("s%d" % 2)
