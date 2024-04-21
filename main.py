@@ -15,7 +15,7 @@ NUM_HOSTS_PER_SWITCH = 3
 AREA = 1
 links = [(1,2),(2,3), (2,5), (3,8), (8,4), (4,6), (4,5), (5,7)]
 
-topo = SingleSwitchTopo(NUM_SWITCHES,NUM_HOSTS_PER_SWITCH, links)
+topo = SingleSwitchTopo(NUM_SWITCHES,NUM_HOSTS_PER_SWITCH, links, network=1)
 net = P4Mininet(program="l2switch.p4", topo=topo, auto_arp=False)
 net.start()
 
@@ -45,8 +45,8 @@ for s in range(1,NUM_SWITCHES + 1):
     cpus.append(cpu)
 
 
-h2, h3 = net.get("s2_h2"), net.get("s2_h3")
-h1 = net.get("s1_h2")
+h2, h3 = net.get("n1_s2_h2"), net.get("n1_s2_h3")
+h1 = net.get("n1_s1_h2")
 
 print(h3.cmd("ping -c1 10.2.0.2"))
 print(h2.cmd("arp -n"))

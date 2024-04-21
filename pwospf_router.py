@@ -86,10 +86,10 @@ class PWOSPF_LSU_Data():
             })
             new_links_set.add(lsa.router_id)
         dif = current_links.symmetric_difference(new_links_set)
-        # print(current_links,new_links_set, dif,len(dif))
+        
         
         # No Change
-        if len(dif) == 0:
+        if len(dif) == 0:            
             return False
         else:
             self.links = new_links
@@ -156,6 +156,9 @@ class PWOSPF_Router(Thread):
                 self.check_hello_timeout()
                 self.helloint_timer = current_time
             if current_time - LSUINT > self.lsuint_timer:
+                # print(f"~~~~~~~Network of {self.ip}~~~~~~~~~~~~~~~")   
+                # for x in self.routing_manager.entries:
+                #     print(x)
                 self.send_LSU()
                 
             
@@ -230,8 +233,6 @@ class PWOSPF_Router(Thread):
             router_id = pkt[PWOSPF_Header].router_id
             if router_id == self.id:
                 return
-            # if self.id == "10.2.0.1" and router_id == "10.1.0.1":
-            #     pkt.show2()
             has_changed = False
             if router_id not in self.LSUS: 
                 self.LSUS[router_id] = PWOSPF_LSU_Data(pkt)
@@ -242,10 +243,10 @@ class PWOSPF_Router(Thread):
                 if current_LSU.current_sequence == pkt[PWOSPF_LSU].sequence:
                     return
                 has_changed = current_LSU.update_data(pkt)
-                    
+            # pkt.show2()
+            # print(has_changed)
             # Flooding
             self.flood(pkt)
-            
             if has_changed:
                 entries = self.generate_routing()
                 self.routing_manager.update_routing_table(entries)
@@ -376,6 +377,24 @@ class RoutingTableManager():
         # print(entries_to_change)
         # print(entries_to_remove)
         
+        for entryKey in entries_to_remove:
+            entry = current_entries[entryKey]
+            target = entry.get_target()
+            subnet = str(ipaddress.ip_network(f"{target}/{self.mask}",strict=False).network_address)
+            
+            if entry.is_drop():
+                # self.sw.insertTableEntry(table_name='MyIngress.ipv4_routing',
+                #     match_fields={'hdr.ipv4.dstAddr': [target, 24]},
+                #     action_name='MyIngress.drop',
+                #     action_params={})
+                pass
+            else:
+                port,mac = entry.get_port_and_mac()
+                self.sw.removeTableEntry(table_name='MyIngress.ipv4_routing',
+                    match_fields={'hdr.ipv4.dstAddr': [subnet, self.prefix] },
+                    action_name='MyIngress.forward_gateway',
+                    action_params={'dst': mac, 'port':port})
+                del self.entries[entryKey]
         for entryKey in entries_to_add:
             entry = incoming_entries[entryKey]
             target = entry.get_target()
@@ -406,20 +425,23 @@ class RoutingTableManager():
             if entry_old.is_same(entry_new):
                 continue
             else:
-                print("Deleting")
+                # print("Deleting")
                 port,mac = entry_old.get_port_and_mac()
                 self.sw.removeTableEntry(table_name='MyIngress.ipv4_routing',
                     match_fields={'hdr.ipv4.dstAddr': [subnet_old, self.prefix] },
                     action_name='MyIngress.forward_gateway',
                     action_params={'dst': mac, 'port':port})
                 
-                port,mac = entry_new.get_port_and_mac()
-                self.sw.insertTableEntry(table_name='MyIngress.ipv4_routing',
-                    match_fields={'hdr.ipv4.dstAddr': [subnet_new, self.prefix] },
-                    action_name='MyIngress.forward_gateway',
-                    action_params={'dst': mac, 'port':port})
-                
-                self.entries[entryKey] = entry_new
+                if not entry_new.is_drop():
+                    # print(port,mac,entry_new,subnet_new)
+                    port,mac = entry_new.get_port_and_mac()
+                    self.sw.insertTableEntry(table_name='MyIngress.ipv4_routing',
+                        match_fields={'hdr.ipv4.dstAddr': [subnet_new, self.prefix] },
+                        action_name='MyIngress.forward_gateway',
+                        action_params={'dst': mac, 'port':port})
+                    self.entries[entryKey] = entry_new
+                else:
+                    del self.entries[entryKey]
             
         
         
