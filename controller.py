@@ -2,15 +2,15 @@ from threading import Thread, Event
 from scapy.all import sendp
 from scapy.all import Packet, Ether, IP, ARP, ls, ICMP
 from scapy.all import UDP
-from async_sniff import sniff
-from cpu_metadata import CPUMetadata
+from .async_sniff import sniff
+from .cpu_metadata import CPUMetadata
 import time
 import ipaddress
 
 
 
-from arp_handler import ArpHandler
-from pwospf_router import PWOSPF_Router
+from .arp_handler import ArpHandler
+from .pwospf_router import PWOSPF_Router
 
 ARP_OP_REQ   = 0x0001
 ARP_OP_REPLY = 0x0002

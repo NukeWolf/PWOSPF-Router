@@ -4,8 +4,8 @@ from collections import deque
 import time
 import ipaddress
 
-from pwospf_packet import PWOSPF_Header,PWOSPF_Hello, PWOSPF_LSU, PWOSPF_LSA
-from cpu_metadata import CPUMetadata
+from .pwospf_packet import PWOSPF_Header,PWOSPF_Hello, PWOSPF_LSU, PWOSPF_LSA
+from .cpu_metadata import CPUMetadata
 
 from scapy.all import Packet, Ether, IP, ARP, ls
 

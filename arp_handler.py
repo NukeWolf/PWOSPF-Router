@@ -1,5 +1,5 @@
 from scapy.all import Packet, Ether, IP, ARP, ls
-from cpu_metadata import CPUMetadata
+from .cpu_metadata import CPUMetadata
 
 ARP_OP_REQ   = 0x0001
 ARP_OP_REPLY = 0x0002
