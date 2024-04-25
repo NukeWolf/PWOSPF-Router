@@ -16,7 +16,7 @@ AREA = 1
 links = [(1,2),(2,3), (2,5), (3,8), (8,4), (4,6), (4,5), (5,7)]
 
 topo = SingleSwitchTopo(NUM_SWITCHES,NUM_HOSTS_PER_SWITCH, links, network=1)
-net = P4Mininet(program="l2switch.p4", topo=topo, auto_arp=False)
+net = P4Mininet(program="router.p4", topo=topo, auto_arp=False)
 net.start()
 
 cpus = [] 
